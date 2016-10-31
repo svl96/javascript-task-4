@@ -182,8 +182,11 @@ function applyFunctions(collectionHandler, func) {
 function getSortedParams(params) {
     var newParams = [];
     var selectParams = params.reduce(getAllAndRemoveSelect(newParams), []);
+    if (selectParams.length === 0) {
+        return newParams.sort(compareFunc);
+    }
     var selectIntersection = selectParams.reduce(getIntersection, selectParams[0] || []);
-    if (selectIntersection === []) {
+    if (selectIntersection.length === 0) {
         return [];
     }
     newParams.push({ name: 'select', params: selectIntersection });
@@ -194,9 +197,10 @@ function getSortedParams(params) {
 function processQuery(collection, params) {
     var collectionHandler = new CollectionHandlerConstructor(collection);
     var sortedParams = getSortedParams(params);
-    if (sortedParams === []) {
+    if (sortedParams.length === 0) {
         return [];
     }
+    console.info(sortedParams);
     collectionHandler = sortedParams.reduce(applyFunctions, collectionHandler);
 
     return collectionHandler.collection;
@@ -211,7 +215,7 @@ function processQuery(collection, params) {
 
 exports.query = function (collection) {
     var params = [].slice.call(arguments, 1);
-    if (params === []) {
+    if (params.length === 0) {
         return collection.slice();
     }
 
