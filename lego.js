@@ -4,7 +4,7 @@
  * Сделано задание на звездочку
  * Реализованы методы or и and
  */
-exports.isStar = false;
+exports.isStar = true;
 
 var funcPriority = { oneOf: 1,
     allOf: 1,
@@ -43,6 +43,9 @@ function selectRecord(params) {
 
 function selectBy(collection) {
     return function (params) {
+        if (params === []) {
+            return new CollectionHandlerConstructor([]);
+        }
         var selectedCollection = collection.map(selectRecord(params));
 
         return new CollectionHandlerConstructor(selectedCollection);
@@ -124,7 +127,7 @@ function compareFunc(func1, func2) {
 function getAllAndRemoveSelect(newParams) {
     return function (selectParams, parameter) {
         if (parameter.name === 'select') {
-            selectParams = selectParams.concat(parameter.params);
+            selectParams.push(parameter.params);
         } else {
             newParams.push(parameter);
         }
@@ -179,9 +182,11 @@ function applyFunctions(collectionHandler, func) {
 function getSortedParams(params) {
     var newParams = [];
     var selectParams = params.reduce(getAllAndRemoveSelect(newParams), []);
-    if (selectParams.length !== 0) {
-        newParams.push({ name: 'select', params: selectParams });
+    var selectIntersection = selectParams.reduce(getIntersection, selectParams[0] || []);
+    if (selectIntersection === []) {
+        return [];
     }
+    newParams.push({ name: 'select', params: selectIntersection });
 
     return newParams.sort(compareFunc);
 }
@@ -189,6 +194,9 @@ function getSortedParams(params) {
 function processQuery(collection, params) {
     var collectionHandler = new CollectionHandlerConstructor(collection);
     var sortedParams = getSortedParams(params);
+    if (sortedParams === []) {
+        return [];
+    }
     collectionHandler = sortedParams.reduce(applyFunctions, collectionHandler);
 
     return collectionHandler.collection;
@@ -203,6 +211,9 @@ function processQuery(collection, params) {
 
 exports.query = function (collection) {
     var params = [].slice.call(arguments, 1);
+    if (params === []) {
+        return collection.slice();
+    }
 
     return processQuery(collection, params);
 };
