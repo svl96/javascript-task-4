@@ -4,7 +4,7 @@
  * Сделано задание на звездочку
  * Реализованы методы or и and
  */
-exports.isStar = false;
+exports.isStar = true;
 
 var funcPriority = { oneOf: 1,
     allOf: 1,
@@ -143,17 +143,19 @@ function applyEachFunc(collection) {
 }
 
 function concatDistinct(concatCollection, records) {
-    var filteredRecords = records.filter(function (record) {
-        return concatCollection.indexOf(record) === -1;
+    records.forEach(function (record) {
+        if (concatCollection.indexOf(record) === -1) {
+            concatCollection.push(record);
+        }
     });
 
-    return concatCollection.concat(filteredRecords);
+    return concatCollection;
 }
 
-function or(collection) {
+function or(collectionHandler) {
     return function (params) {
         var concatDistinctCollection = params
-            .map(applyEachFunc(collection))
+            .map(applyEachFunc(collectionHandler))
             .reduce(concatDistinct, []);
 
         return new CollectionHandlerConstructor(concatDistinctCollection);
@@ -166,10 +168,11 @@ function getIntersection(intersection, records) {
     });
 }
 
-function and(collection) {
+function and(collectionHandler) {
     return function (params) {
-        var intersectionOfCollections = params.map(applyEachFunc(collection))
-            .reduce(getIntersection, collection.collection);
+        var intersectionOfCollections = params
+            .map(applyEachFunc(collectionHandler))
+            .reduce(getIntersection, collectionHandler.collection);
 
         return new CollectionHandlerConstructor(intersectionOfCollections);
     };
@@ -200,7 +203,6 @@ function processQuery(collection, params) {
     if (sortedParams.length === 0) {
         return [];
     }
-    console.info(sortedParams);
     collectionHandler = sortedParams.reduce(applyFunctions, collectionHandler);
 
     return collectionHandler.collection;
