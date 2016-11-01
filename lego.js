@@ -6,13 +6,8 @@
  */
 exports.isStar = false;
 
-var funcPriority = { oneOf: 1,
-    allOf: 1,
-    filterIn: 1,
-    sort: 2,
-    select: 3,
-    limitBy: 4,
-    format: 4 };
+var funcPriority = ['oneOf', 'allOf', 'filterIn',
+    'sort', 'select', 'limitBy', 'format'];
 
 function CollectionHandlerConstructor(collect) {
     this.collection = collect.slice();
@@ -121,7 +116,7 @@ function limit(collection) {
 }
 
 function compareFunc(func1, func2) {
-    return funcPriority[func1.name] - funcPriority[func2.name];
+    return funcPriority.indexOf(func1.name) - funcPriority.indexOf(func2.name);
 }
 
 function getAllAndRemoveSelect(newParams) {
