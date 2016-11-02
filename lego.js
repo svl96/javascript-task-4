@@ -4,65 +4,41 @@
  * Сделано задание на звездочку
  * Реализованы методы or и and
  */
-exports.isStar = false;
+exports.isStar = true;
 
-var funcPriority = ['oneOf', 'allOf', 'filterIn',
-    'sort', 'select', 'limitBy', 'format'];
+var funcPriority = ['or', 'and', 'filterIn',
+    'sortBy', 'select', 'limit', 'format'];
 
-function CollectionHandlerConstructor(collect) {
-    this.collection = collect.slice();
-    this.select = selectBy(this.collection);
-    this.filterIn = filterBy(this.collection);
-    this.sort = sortBy(this.collection);
-    this.format = formatWith(this.collection);
-    this.limitBy = limit(this.collection);
-    this.oneOf = or(this);
-    this.allOf = and(this);
-}
-
-function getNewRecordValues(record) {
-    return function (newRecord, parameter) {
+function getSelectedRecordValues(record) {
+    return function (selectedRecord, parameter) {
         if (Object.keys(record).indexOf(parameter) !== -1) {
-            newRecord[parameter] = record[parameter];
+            selectedRecord[parameter] = record[parameter];
         }
 
-        return newRecord;
+        return selectedRecord;
     };
 }
 
-function selectRecord(params) {
-    return function (record) {
-        return params.reduce(getNewRecordValues(record), {});
-    };
+function getCopy(collection) {
+    return collection.slice();
 }
 
-function selectBy(collection) {
-    return function (params) {
-        if (params === []) {
-            return new CollectionHandlerConstructor([]);
-        }
-        var selectedCollection = collection.map(selectRecord(params));
+function select(collection, params) {
 
-        return new CollectionHandlerConstructor(selectedCollection);
-    };
+    return collection.map(function (record) {
+        return params.reduce(getSelectedRecordValues(record), {});
+    });
 }
 
-function filterRecords(value, filterParams) {
-    return function (record) {
+function filterIn(collection, params) {
+    var value = params[0];
+    var filterParams = params[1];
+
+    return collection.filter(function (record) {
         var recValue = record[value];
 
         return filterParams.indexOf(recValue) !== -1;
-    };
-}
-
-function filterBy(collection) {
-    return function (params) {
-        var value = params[0];
-        var filterParam = params[1];
-        var filteredCollection = collection.filter(filterRecords(value, filterParam));
-
-        return new CollectionHandlerConstructor(filteredCollection);
-    };
+    });
 }
 
 function compareRecords(value, order) {
@@ -77,63 +53,35 @@ function compareRecords(value, order) {
     };
 }
 
-function sortBy(collection) {
-    return function (params) {
-        var value = params[0];
-        var order = params[1] === 'desc' ? -1 : 1;
-        var sortedCollection = collection.sort(compareRecords(value, order));
+function sortBy(collection, params) {
+    var value = params[0];
+    var order = params[1] === 'desc' ? -1 : 1;
 
-        return new CollectionHandlerConstructor(sortedCollection);
-    };
+    return collection.slice().sort(compareRecords(value, order));
 }
 
-function formatRecordsBy(param, func) {
-    return function (record) {
+
+function format(collection, params) {
+    var param = params[0];
+    var formatFunc = params[1];
+
+    return collection.map(function (record) {
         var copyRecord = Object.assign({}, record);
-        copyRecord[param] = func(copyRecord[param]);
+        copyRecord[param] = formatFunc(copyRecord[param]);
 
         return copyRecord;
-    };
+    });
 }
 
-function formatWith(collection) {
-    return function (params) {
-        var param = params[0];
-        var func = params[1];
-        var formattedCollection = collection.map(formatRecordsBy(param, func));
+function limit(collection, params) {
+    var count = params[0];
 
-        return new CollectionHandlerConstructor(formattedCollection);
-    };
-}
-
-function limit(collection) {
-    return function (params) {
-        var count = params[0];
-        var limitedCollection = collection.slice(0, count);
-
-        return new CollectionHandlerConstructor(limitedCollection);
-    };
-}
-
-function compareFunc(func1, func2) {
-    return funcPriority.indexOf(func1.name) - funcPriority.indexOf(func2.name);
-}
-
-function getAllAndRemoveSelect(newParams) {
-    return function (selectParams, parameter) {
-        if (parameter.name === 'select') {
-            selectParams.push(parameter.params);
-        } else {
-            newParams.push(parameter);
-        }
-
-        return selectParams;
-    };
+    return collection.slice(0, count);
 }
 
 function applyEachFunc(collection) {
-    return function (func) {
-        return collection[func.name](func.params).collection;
+    return function (parameter) {
+        return parameter.func(collection, parameter.params);
     };
 }
 
@@ -147,14 +95,14 @@ function concatDistinct(concatCollection, records) {
     return concatCollection;
 }
 
-function or(collectionHandler) {
-    return function (params) {
-        var concatDistinctCollection = params
-            .map(applyEachFunc(collectionHandler))
-            .reduce(concatDistinct, []);
+function or(collection, params) {
+    var concatDistinctCollection = params
+        .map(applyEachFunc(collection))
+        .reduce(concatDistinct, []);
 
-        return new CollectionHandlerConstructor(concatDistinctCollection);
-    };
+    return collection.filter(function (record) {
+        return concatDistinctCollection.indexOf(record) !== -1;
+    });
 }
 
 function getIntersection(intersection, records) {
@@ -163,44 +111,57 @@ function getIntersection(intersection, records) {
     });
 }
 
-function and(collectionHandler) {
-    return function (params) {
-        var intersectionOfCollections = params
-            .map(applyEachFunc(collectionHandler))
-            .reduce(getIntersection, collectionHandler.collection);
+function and(collection, params) {
+    var intersectionOfCollections = params
+        .map(applyEachFunc(collection))
+        .reduce(getIntersection, collection);
 
-        return new CollectionHandlerConstructor(intersectionOfCollections);
+    return collection.filter(function (record) {
+        return intersectionOfCollections.indexOf(record) !== -1;
+    });
+}
+
+function compareFunc(param1, param2) {
+    return funcPriority.indexOf(param1.func.name) - funcPriority.indexOf(param2.func.name);
+}
+
+function getAllAndRemoveSelect(paramsWithoutSelect) {
+    return function (selectParams, parameter) {
+        if (parameter.func.name === 'select') {
+            selectParams.push(parameter.params);
+        } else {
+            paramsWithoutSelect.push(parameter);
+        }
+
+        return selectParams;
     };
 }
 
-function applyFunctions(collectionHandler, func) {
-    return collectionHandler[func.name](func.params);
-}
-
 function getSortedParams(params) {
-    var newParams = [];
-    var selectParams = params.reduce(getAllAndRemoveSelect(newParams), []);
+    var paramsWithoutSelect = [];
+    var selectParams = params.reduce(getAllAndRemoveSelect(paramsWithoutSelect), []);
     if (selectParams.length === 0) {
-        return newParams.sort(compareFunc);
+        return params.sort(compareFunc);
     }
     var selectIntersection = selectParams.reduce(getIntersection, selectParams[0] || []);
     if (selectIntersection.length === 0) {
         return [];
     }
-    newParams.push({ name: 'select', params: selectIntersection });
+    paramsWithoutSelect.push({ func: select, params: selectIntersection });
 
-    return newParams.sort(compareFunc);
+    return paramsWithoutSelect.sort(compareFunc);
 }
 
-function processQuery(collection, params) {
-    var collectionHandler = new CollectionHandlerConstructor(collection);
+function processQuery(inputCollection, params) {
+    var copyCollection = getCopy(inputCollection);
     var sortedParams = getSortedParams(params);
     if (sortedParams.length === 0) {
         return [];
     }
-    collectionHandler = sortedParams.reduce(applyFunctions, collectionHandler);
 
-    return collectionHandler.collection;
+    return sortedParams.reduce(function (collection, parameter) {
+        return parameter.func(collection, parameter.params);
+    }, copyCollection);
 }
 
 /**
@@ -225,7 +186,7 @@ exports.query = function (collection) {
  * @returns {Object}
  */
 exports.select = function () {
-    return { name: 'select', params: [].slice.call(arguments) };
+    return { func: select, params: [].slice.call(arguments) };
 };
 
 /**
@@ -237,7 +198,7 @@ exports.select = function () {
 exports.filterIn = function (property, values) {
     console.info(property, values);
 
-    return { name: 'filterIn', params: [property, values] };
+    return { func: filterIn, params: [property, values] };
 };
 
 /**
@@ -249,7 +210,7 @@ exports.filterIn = function (property, values) {
 exports.sortBy = function (property, order) {
     console.info(property, order);
 
-    return { name: 'sort', params: [property, order] };
+    return { func: sortBy, params: [property, order] };
 };
 
 /**
@@ -261,7 +222,7 @@ exports.sortBy = function (property, order) {
 exports.format = function (property, formatter) {
     console.info(property, formatter);
 
-    return { name: 'format', params: [property, formatter] };
+    return { func: format, params: [property, formatter] };
 };
 
 /**
@@ -272,7 +233,7 @@ exports.format = function (property, formatter) {
 exports.limit = function (count) {
     console.info(count);
 
-    return { name: 'limitBy', params: [count] };
+    return { func: limit, params: [count] };
 };
 
 if (exports.isStar) {
@@ -284,7 +245,7 @@ if (exports.isStar) {
      * @returns {Object}
      */
     exports.or = function () {
-        return { name: 'oneOf', params: [].slice.call(arguments) };
+        return { func: or, params: [].slice.call(arguments) };
     };
 
     /**
@@ -294,6 +255,6 @@ if (exports.isStar) {
      * @returns {Object}
      */
     exports.and = function () {
-        return { name: 'allOf', params: [].slice.call(arguments) };
+        return { func: and, params: [].slice.call(arguments) };
     };
 }
