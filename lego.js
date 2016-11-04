@@ -35,9 +35,7 @@ function filterIn(collection, params) {
     var filterParams = params[1];
 
     return collection.filter(function (record) {
-        var recValue = record[value];
-
-        return filterParams.indexOf(recValue) !== -1;
+        return filterParams.indexOf(record[value]) !== -1;
     });
 }
 
@@ -63,11 +61,11 @@ function sortBy(collection, params) {
 
 function format(collection, params) {
     var param = params[0];
-    var formatFunc = params[1];
+    var getFormattedRecord = params[1];
 
     return collection.map(function (record) {
         var copyRecord = Object.assign({}, record);
-        copyRecord[param] = formatFunc(copyRecord[param]);
+        copyRecord[param] = getFormattedRecord(copyRecord[param]);
 
         return copyRecord;
     });
@@ -125,12 +123,12 @@ function compareFunc(param1, param2) {
     return funcPriority.indexOf(param1.func.name) - funcPriority.indexOf(param2.func.name);
 }
 
-function getAllAndRemoveSelect(paramsWithoutSelect) {
-    return function (selectParams, parameter) {
-        if (parameter.func.name === 'select') {
-            selectParams.push(parameter.params);
+function removeSelect(functionsWithoutSelect) {
+    return function (selectParams, currentFunction) {
+        if (currentFunction.func.name === 'select') {
+            selectParams.push(currentFunction.params);
         } else {
-            paramsWithoutSelect.push(parameter);
+            functionsWithoutSelect.push(currentFunction);
         }
 
         return selectParams;
@@ -138,8 +136,8 @@ function getAllAndRemoveSelect(paramsWithoutSelect) {
 }
 
 function getSortedParams(params) {
-    var paramsWithoutSelect = [];
-    var selectParams = params.reduce(getAllAndRemoveSelect(paramsWithoutSelect), []);
+    var functionsWithoutSelect = [];
+    var selectParams = params.reduce(removeSelect(functionsWithoutSelect), []);
     if (selectParams.length === 0) {
         return params.sort(compareFunc);
     }
@@ -147,9 +145,9 @@ function getSortedParams(params) {
     if (selectIntersection.length === 0) {
         return [];
     }
-    paramsWithoutSelect.push({ func: select, params: selectIntersection });
+    functionsWithoutSelect.push({ func: select, params: selectIntersection });
 
-    return paramsWithoutSelect.sort(compareFunc);
+    return functionsWithoutSelect.sort(compareFunc);
 }
 
 function processQuery(inputCollection, params) {
