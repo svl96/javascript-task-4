@@ -23,16 +23,15 @@ function getCopy(collection) {
     return collection.slice();
 }
 
-function select(collection, params) {
-
+function select(collection, args) {
     return collection.map(function (record) {
-        return params.reduce(getSelectedRecordValues(record), {});
+        return args.reduce(getSelectedRecordValues(record), {});
     });
 }
 
-function filterIn(collection, params) {
-    var value = params[0];
-    var filterParams = params[1];
+function filterIn(collection, args) {
+    var value = args[0];
+    var filterParams = args[1];
 
     return collection.filter(function (record) {
         return filterParams.indexOf(record[value]) !== -1;
@@ -51,35 +50,35 @@ function compareRecords(value, order) {
     };
 }
 
-function sortBy(collection, params) {
-    var value = params[0];
-    var order = params[1] === 'desc' ? -1 : 1;
+function sortBy(collection, args) {
+    var value = args[0];
+    var order = args[1] === 'desc' ? -1 : 1;
 
     return collection.slice().sort(compareRecords(value, order));
 }
 
 
-function format(collection, params) {
-    var param = params[0];
-    var getFormattedRecord = params[1];
+function format(collection, args) {
+    var parameter = args[0];
+    var getFormattedRecord = args[1];
 
     return collection.map(function (record) {
         var copyRecord = Object.assign({}, record);
-        copyRecord[param] = getFormattedRecord(copyRecord[param]);
+        copyRecord[parameter] = getFormattedRecord(copyRecord[parameter]);
 
         return copyRecord;
     });
 }
 
-function limit(collection, params) {
-    var count = params[0];
+function limit(collection, args) {
+    var count = args[0];
 
     return collection.slice(0, count);
 }
 
 function applyEachFunc(collection) {
-    return function (parameter) {
-        return parameter.func(collection, parameter.params);
+    return function (func) {
+        return func.func(collection, func.args);
     };
 }
 
@@ -93,8 +92,8 @@ function concatDistinct(concatCollection, records) {
     return concatCollection;
 }
 
-function or(collection, params) {
-    var concatDistinctCollection = params
+function or(collection, args) {
+    var concatDistinctCollection = args
         .map(applyEachFunc(collection))
         .reduce(concatDistinct, []);
 
@@ -109,8 +108,8 @@ function getIntersection(intersection, records) {
     });
 }
 
-function and(collection, params) {
-    var intersectionOfCollections = params
+function and(collection, args) {
+    var intersectionOfCollections = args
         .map(applyEachFunc(collection))
         .reduce(getIntersection, collection);
 
@@ -119,60 +118,60 @@ function and(collection, params) {
     });
 }
 
-function compareFunc(param1, param2) {
-    return funcPriority.indexOf(param1.func.name) - funcPriority.indexOf(param2.func.name);
+function compareFunc(func1, func2) {
+    return funcPriority.indexOf(func1.func.name) - funcPriority.indexOf(func2.func.name);
 }
 
 function removeSelect(functionsWithoutSelect) {
-    return function (selectParams, currentFunction) {
+    return function (selectArgs, currentFunction) {
         if (currentFunction.func.name === 'select') {
-            selectParams.push(currentFunction.params);
+            selectArgs.push(currentFunction.args);
         } else {
             functionsWithoutSelect.push(currentFunction);
         }
 
-        return selectParams;
+        return selectArgs;
     };
 }
 
-function getSortedParams(params) {
+function getSortedFunctions(functions) {
     var functionsWithoutSelect = [];
-    var selectParams = params.reduce(removeSelect(functionsWithoutSelect), []);
-    if (selectParams.length === 0) {
-        return params.sort(compareFunc);
+    var selectParams = functions.reduce(removeSelect(functionsWithoutSelect), []);
+    if (!selectParams.length) {
+        return functions.sort(compareFunc);
     }
     var selectIntersection = selectParams.reduce(getIntersection, selectParams[0] || []);
-    if (selectIntersection.length === 0) {
+    if (!selectIntersection.length) {
         return [];
     }
-    functionsWithoutSelect.push({ func: select, params: selectIntersection });
+    functionsWithoutSelect.push({ func: select, args: selectIntersection });
 
     return functionsWithoutSelect.sort(compareFunc);
 }
 
-function processQuery(inputCollection, params) {
+function processQuery(inputCollection, functions) {
     var copyCollection = getCopy(inputCollection);
-    var sortedParams = getSortedParams(params);
-    if (sortedParams.length === 0) {
+    var sortedFunctions = getSortedFunctions(functions);
+    if (!sortedFunctions.length) {
         return [];
     }
 
-    return sortedParams.reduce(function (collection, parameter) {
-        return parameter.func(collection, parameter.params);
+    return sortedFunctions.reduce(function (collection, func) {
+        return func.func(collection, func.args);
     }, copyCollection);
 }
 
 /**
  * Запрос к коллекции
  * @param {Array} collection
- * @params {...Function} – Функции для запроса
+ * @args {...Function} – Функции для запроса
  * @returns {Array}
  */
 
 exports.query = function (collection) {
     var params = [].slice.call(arguments, 1);
-    if (params.length === 0) {
-        return collection.slice();
+    if (!params.length) {
+        return getCopy(collection);
     }
 
     return processQuery(collection, params);
@@ -180,11 +179,11 @@ exports.query = function (collection) {
 
 /**
  * Выбор полей
- * @params {...String}
+ * @args {...String}
  * @returns {Object}
  */
 exports.select = function () {
-    return { func: select, params: [].slice.call(arguments) };
+    return { func: select, args: [].slice.call(arguments) };
 };
 
 /**
@@ -196,7 +195,7 @@ exports.select = function () {
 exports.filterIn = function (property, values) {
     console.info(property, values);
 
-    return { func: filterIn, params: [property, values] };
+    return { func: filterIn, args: [property, values] };
 };
 
 /**
@@ -208,7 +207,7 @@ exports.filterIn = function (property, values) {
 exports.sortBy = function (property, order) {
     console.info(property, order);
 
-    return { func: sortBy, params: [property, order] };
+    return { func: sortBy, args: [property, order] };
 };
 
 /**
@@ -220,7 +219,7 @@ exports.sortBy = function (property, order) {
 exports.format = function (property, formatter) {
     console.info(property, formatter);
 
-    return { func: format, params: [property, formatter] };
+    return { func: format, args: [property, formatter] };
 };
 
 /**
@@ -231,7 +230,7 @@ exports.format = function (property, formatter) {
 exports.limit = function (count) {
     console.info(count);
 
-    return { func: limit, params: [count] };
+    return { func: limit, args: [count] };
 };
 
 if (exports.isStar) {
@@ -239,20 +238,20 @@ if (exports.isStar) {
     /**
      * Фильтрация, объединяющая фильтрующие функции
      * @star
-     * @params {...Function} – Фильтрующие функции
+     * @args {...Function} – Фильтрующие функции
      * @returns {Object}
      */
     exports.or = function () {
-        return { func: or, params: [].slice.call(arguments) };
+        return { func: or, args: [].slice.call(arguments) };
     };
 
     /**
      * Фильтрация, пересекающая фильтрующие функции
      * @star
-     * @params {...Function} – Фильтрующие функции
+     * @args {...Function} – Фильтрующие функции
      * @returns {Object}
      */
     exports.and = function () {
-        return { func: and, params: [].slice.call(arguments) };
+        return { func: and, args: [].slice.call(arguments) };
     };
 }
